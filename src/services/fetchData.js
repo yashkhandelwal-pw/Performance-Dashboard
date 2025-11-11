@@ -15,7 +15,7 @@ export const getUserType = async (email) => {
       return { type: null, data: null }
     }
 
-    const isProgramTeam = data.team === 'Program Team'
+    const isProgramTeam = data.team === 'Program Team' || data.team === 'Ops'
     if (!isProgramTeam && data.status !== 'Active') {
       return { type: null, data: null }
     }

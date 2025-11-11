@@ -21,7 +21,7 @@ const Profile = () => {
         .select('*')
         .eq('email', userEmail)
         .eq('status', 'Active')
-        .eq('team', 'Sales')
+        .in('team', ['Sales', 'Program Team', 'Ops'])
         .single()
 
       if (error) throw error

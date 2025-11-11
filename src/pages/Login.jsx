@@ -25,7 +25,7 @@ const Login = () => {
         .select('*')
         .eq('email', email)
         .eq('status', 'Active')
-        .in('team', ['Sales', 'Program Team'])
+        .in('team', ['Sales', 'Program Team', 'Ops'])
         .single()
 
       if (userError || !userData) {
