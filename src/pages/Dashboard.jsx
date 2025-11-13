@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts'
 import { useAuthStore } from '../utils/auth'
 import { calculateKPIs, getQuotaData } from '../services/fetchData'
-import { calculateOrderKPIs, getCustomerWiseInvoiceAmount } from '../services/orderService'
+import { calculateOrderKPIs } from '../services/orderService'
 import { getCachedData, setCachedData, generateCacheKey } from '../services/cacheService'
+import { formatIndianCurrency } from '../utils/formatCurrency'
 import KPIcard from '../components/KPIcard'
 import FilterBar from '../components/FilterBar'
 
@@ -29,7 +29,6 @@ const Dashboard = () => {
     totalBooks: 0,
     totalOrderPlaced: 0,
   })
-  const [customerChartData, setCustomerChartData] = useState([])
   const [loading, setLoading] = useState(true)
   const [filters, setFilters] = useState({
     startDate: '',
@@ -64,20 +63,18 @@ const Dashboard = () => {
         const cachedKPIs = getCachedData(cacheKey + '_kpis')
         const cachedQuota = getCachedData(cacheKey + '_quota')
         const cachedOrderKPIs = getCachedData(cacheKey + '_order_kpis')
-        const cachedChart = getCachedData(cacheKey + '_chart')
         
-        if (cachedKPIs && cachedQuota && cachedOrderKPIs && cachedChart) {
+        if (cachedKPIs && cachedQuota && cachedOrderKPIs) {
           setKpis(cachedKPIs)
           setQuotaData(cachedQuota)
           setOrderKpis(cachedOrderKPIs)
-          setCustomerChartData(cachedChart)
           setLoading(false)
           return
         }
       }
 
       // Fetch fresh data
-      const [kpiData, quota, orderKpiData, chartData] = await Promise.all([
+      const [kpiData, quota, orderKpiData] = await Promise.all([
         calculateKPIs({
           ...filters,
           userType,
@@ -92,33 +89,23 @@ const Dashboard = () => {
           ...filters,
           userType,
           userEmail,
-        }),
-        getCustomerWiseInvoiceAmount({
-          ...filters,
-          userType,
-          userEmail,
         })
       ])
 
       setKpis(kpiData)
       setQuotaData(quota)
       setOrderKpis(orderKpiData)
-      setCustomerChartData(chartData)
 
       // Cache the data
       setCachedData(cacheKey + '_kpis', kpiData)
       setCachedData(cacheKey + '_quota', quota)
       setCachedData(cacheKey + '_order_kpis', orderKpiData)
-      setCachedData(cacheKey + '_chart', chartData)
     } catch (error) {
       console.error('Error loading KPIs:', error)
     } finally {
       setLoading(false)
     }
   }
-
-  // Chart colors
-  const COLORS = ['#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#06B6D4', '#EF4444', '#6366F1', '#14B8A6', '#F97316']
 
   return (
     <div className="min-h-screen p-4 pb-24">
@@ -143,58 +130,24 @@ const Dashboard = () => {
               <div className="grid grid-cols-3 gap-3">
                 <KPIcard
                   title="Total Invoice Amount"
-                  value={`₹${orderKpis.totalInvoiceAmount.toLocaleString()}`}
-                  gradient="from-blue-500 to-blue-600"
+                  value={formatIndianCurrency(orderKpis.totalInvoiceAmount)}
+                  gradient="from-emerald-500 to-emerald-600"
                   small={true}
                 />
                 <KPIcard
                   title="Total Books"
                   value={orderKpis.totalBooks}
-                  gradient="from-purple-500 to-purple-600"
+                  gradient="from-orange-500 to-orange-600"
                   small={true}
                 />
                 <KPIcard
                   title="Total Order Placed"
                   value={orderKpis.totalOrderPlaced}
-                  gradient="from-indigo-500 to-indigo-600"
+                  gradient="from-cyan-500 to-cyan-600"
                   small={true}
                 />
               </div>
             </div>
-
-            {/* Customer-Wise Invoice Distribution Chart */}
-            {customerChartData.length > 0 && (
-              <div className="bg-white rounded-xl p-4 shadow-lg">
-                <h3 className="text-sm font-semibold text-gray-800 mb-3">Customer-Wise Invoice Distribution (Top 10)</h3>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={customerChartData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {customerChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      formatter={(value) => `₹${value.toLocaleString()}`}
-                    />
-                    <Legend 
-                      layout="horizontal" 
-                      verticalAlign="bottom" 
-                      align="center"
-                      wrapperStyle={{ fontSize: '12px' }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            )}
 
             {/* Sample Overview KPIs */}
             <div className="bg-white rounded-xl p-4 shadow-lg">

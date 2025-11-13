@@ -9,6 +9,7 @@ import {
 } from '../services/orderService'
 import { getCachedData, setCachedData, generateCacheKey } from '../services/cacheService'
 import { exportToExcel } from '../services/exportExcel'
+import { formatIndianCurrency } from '../utils/formatCurrency'
 import KPIcard from '../components/KPIcard'
 import FilterBar from '../components/FilterBar'
 import DataTable from '../components/DataTable'
@@ -123,11 +124,12 @@ const Order = () => {
   }, [searchQuery, data])
 
   const handleExport = () => {
+    // Export only Order Overview table data (filteredData respects status filter and search)
     const exportData = filteredData.map(row => ({
       'Date': row.time_stamp || '',
       'Order ID': row.submission_id || '',
       'Customer Name': row.company_trade_name || '',
-      'Invoice Amount': row.order_amount || 0,
+      'Invoice Amount': Math.round(parseFloat(row.order_amount) || 0),
       'Books': row.no_of_books || 0,
       'Status': row.status || '',
       'Invoice Link': row.invoice_link || '',
@@ -140,7 +142,8 @@ const Order = () => {
       'SKU Info': row.sku_info || '',
     }))
 
-    const filename = `order_data_${new Date().toISOString().split('T')[0]}.xlsx`
+    const statusLabel = statusFilter === 'ALL' ? 'all' : statusFilter.toLowerCase().replace(/ /g, '_')
+    const filename = `order_overview_${statusLabel}_${new Date().toISOString().split('T')[0]}.xlsx`
     exportToExcel(exportData, filename)
   }
 
@@ -148,7 +151,7 @@ const Order = () => {
     const exportData = customerAnalysis.map((row, idx) => ({
       'Rank': idx + 1,
       'Customer Name': row.customerName || '',
-      'Invoice Amount': row.invoiceAmount || 0,
+      'Invoice Amount': Math.round(row.invoiceAmount || 0),
       'Total Books': row.totalBooks || 0,
     }))
 
@@ -200,7 +203,7 @@ const Order = () => {
     { key: 'time_stamp', label: 'Date', render: (val) => val ? new Date(val).toLocaleDateString() : '-' },
     { key: 'submission_id', label: 'Order ID' },
     { key: 'company_trade_name', label: 'Customer', render: (val) => val && val.length > 20 ? val.substring(0, 20) + '...' : val || '-' },
-    { key: 'order_amount', label: 'Amount', render: (val) => val ? `₹${parseFloat(val).toLocaleString()}` : '-' },
+    { key: 'order_amount', label: 'Amount', render: (val) => val ? formatIndianCurrency(val) : '-' },
     { key: 'no_of_books', label: 'Books' },
     { key: 'status', label: 'Status' },
     { key: 'invoice_link', label: 'Invoice', render: (val) => val ? <a href={val} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs">Link</a> : '-' },
@@ -219,15 +222,7 @@ const Order = () => {
         animate={{ opacity: 1 }}
         className="max-w-7xl mx-auto"
       >
-        <div className="flex justify-between items-center mb-4">
-          <h1 className="text-2xl font-bold text-gray-800">Orders</h1>
-          <button
-            onClick={handleExport}
-            className="bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors flex items-center gap-2"
-          >
-            📥 Export
-          </button>
-        </div>
+        <h1 className="text-2xl font-bold text-gray-800 mb-4">Orders</h1>
 
         <FilterBar filters={filters} onFilterChange={setFilters} showCustomerFilter={true} />
 
@@ -237,20 +232,20 @@ const Order = () => {
           <div className="grid grid-cols-3 gap-3">
             <KPIcard
               title="Total Invoice Amount"
-              value={`₹${kpis.totalInvoiceAmount.toLocaleString()}`}
-              gradient="from-blue-500 to-blue-600"
+              value={formatIndianCurrency(kpis.totalInvoiceAmount)}
+              gradient="from-emerald-500 to-emerald-600"
               small={true}
             />
             <KPIcard
               title="Total Books"
               value={kpis.totalBooks}
-              gradient="from-purple-500 to-purple-600"
+              gradient="from-orange-500 to-orange-600"
               small={true}
             />
             <KPIcard
               title="Total Order Placed"
               value={kpis.totalOrderPlaced}
-              gradient="from-indigo-500 to-indigo-600"
+              gradient="from-cyan-500 to-cyan-600"
               small={true}
             />
           </div>
@@ -343,7 +338,15 @@ const Order = () => {
 
         {/* Order Overview Table */}
         <div className="mb-6">
-          <h2 className="text-base font-semibold text-gray-800 mb-3">Order Overview</h2>
+          <div className="flex justify-between items-center mb-3">
+            <h2 className="text-base font-semibold text-gray-800">Order Overview</h2>
+            <button
+              onClick={handleExport}
+              className="bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors flex items-center gap-2"
+            >
+              📥 Export
+            </button>
+          </div>
           {loading ? (
             <div className="flex justify-center items-center h-64 bg-white rounded-xl">
               <div className="text-xs text-gray-500">Loading...</div>
@@ -462,7 +465,7 @@ const Order = () => {
                         {customer.customerName}
                       </td>
                       <td className="px-3 py-2 text-xs text-gray-900 font-semibold">
-                        ₹{customer.invoiceAmount.toLocaleString()}
+                        {formatIndianCurrency(customer.invoiceAmount)}
                       </td>
                       <td className="px-3 py-2 text-xs text-gray-900">
                         {customer.totalBooks.toLocaleString()}
