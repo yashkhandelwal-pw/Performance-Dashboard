@@ -8,75 +8,83 @@ import {
   getAllActiveSalesEmployees,
   getEmployeesByZM,
 } from '../services/fetchData'
+import { getUniqueCustomers } from '../services/orderService'
 
-const FilterBar = ({ filters, onFilterChange }) => {
+const FilterBar = ({ filters, onFilterChange, showCustomerFilter = false }) => {
   const { userType, userEmail } = useAuthStore()
   const [employees, setEmployees] = useState([])
   const [reportingManagers, setReportingManagers] = useState([])
   const [zonalManagers, setZonalManagers] = useState([])
+  const [customers, setCustomers] = useState([])
   const [isExpanded, setIsExpanded] = useState(false)
 
   useEffect(() => {
     const loadFilters = async () => {
       if (userType === 'reporting_manager') {
         const emps = await getEmployeesByRM(userEmail)
-        setEmployees(emps)
+        setEmployees(emps.sort((a, b) => a.name.localeCompare(b.name)))
       } else if (userType === 'zonal_manager') {
         const rms = await getReportingManagersByZM(userEmail)
-        setReportingManagers(rms)
+        setReportingManagers(rms.sort((a, b) => a.name.localeCompare(b.name)))
         
         if (filters.selectedRM && filters.selectedRM !== 'ALL') {
           const emps = await getEmployeesByRM(filters.selectedRM)
-          setEmployees(emps)
+          setEmployees(emps.sort((a, b) => a.name.localeCompare(b.name)))
         } else {
           setEmployees([])
         }
       } else if (userType === 'program_team') {
         const zms = await getAllZonalManagers()
-        setZonalManagers(zms)
+        setZonalManagers(zms.sort((a, b) => a.name.localeCompare(b.name)))
 
         if (filters.selectedZM && filters.selectedZM !== 'ALL') {
           const rms = await getReportingManagersByZM(filters.selectedZM)
-          setReportingManagers(rms)
+          setReportingManagers(rms.sort((a, b) => a.name.localeCompare(b.name)))
 
           if (filters.selectedRM && filters.selectedRM !== 'ALL') {
             const emps = await getEmployeesByRM(filters.selectedRM)
-            setEmployees(emps)
+            setEmployees(emps.sort((a, b) => a.name.localeCompare(b.name)))
           } else {
             const emps = await getEmployeesByZM(filters.selectedZM)
-            setEmployees(emps)
+            setEmployees(emps.sort((a, b) => a.name.localeCompare(b.name)))
           }
         } else {
           const allRms = await getAllReportingManagers()
-          setReportingManagers(allRms)
+          setReportingManagers(allRms.sort((a, b) => a.name.localeCompare(b.name)))
 
           if (filters.selectedRM && filters.selectedRM !== 'ALL') {
             const emps = await getEmployeesByRM(filters.selectedRM)
-            setEmployees(emps)
+            setEmployees(emps.sort((a, b) => a.name.localeCompare(b.name)))
           } else {
             const allEmps = await getAllActiveSalesEmployees()
-            setEmployees(allEmps.map(emp => ({ email: emp.email, name: emp.name })))
+            setEmployees(allEmps.map(emp => ({ email: emp.email, name: emp.name })).sort((a, b) => a.name.localeCompare(b.name)))
           }
         }
+      }
+
+      // Load customers for Order page
+      if (showCustomerFilter) {
+        const customerList = await getUniqueCustomers({ ...filters, userType, userEmail })
+        setCustomers(customerList)
       }
     }
 
     loadFilters()
-  }, [userType, userEmail, filters.selectedRM, filters.selectedZM])
+  }, [userType, userEmail, filters.selectedRM, filters.selectedZM, showCustomerFilter])
 
   const handleZMChange = async (zmEmail) => {
     onFilterChange({ ...filters, selectedZM: zmEmail, selectedRM: 'ALL', selectedEmployee: 'ALL' })
 
     if (zmEmail === 'ALL') {
       const rms = await getAllReportingManagers()
-      setReportingManagers(rms)
+      setReportingManagers(rms.sort((a, b) => a.name.localeCompare(b.name)))
       const allEmps = await getAllActiveSalesEmployees()
-      setEmployees(allEmps.map(emp => ({ email: emp.email, name: emp.name })))
+      setEmployees(allEmps.map(emp => ({ email: emp.email, name: emp.name })).sort((a, b) => a.name.localeCompare(b.name)))
     } else {
       const rms = await getReportingManagersByZM(zmEmail)
-      setReportingManagers(rms)
+      setReportingManagers(rms.sort((a, b) => a.name.localeCompare(b.name)))
       const emps = await getEmployeesByZM(zmEmail)
-      setEmployees(emps)
+      setEmployees(emps.sort((a, b) => a.name.localeCompare(b.name)))
     }
   }
 
@@ -85,16 +93,16 @@ const FilterBar = ({ filters, onFilterChange }) => {
     onFilterChange(updated)
     if (rmEmail !== 'ALL') {
       const emps = await getEmployeesByRM(rmEmail)
-      setEmployees(emps)
+      setEmployees(emps.sort((a, b) => a.name.localeCompare(b.name)))
     } else {
       if (userType === 'program_team') {
         const currentZM = updated.selectedZM
         if (currentZM && currentZM !== 'ALL') {
           const emps = await getEmployeesByZM(currentZM)
-          setEmployees(emps)
+          setEmployees(emps.sort((a, b) => a.name.localeCompare(b.name)))
         } else {
           const allEmps = await getAllActiveSalesEmployees()
-          setEmployees(allEmps.map(emp => ({ email: emp.email, name: emp.name })))
+          setEmployees(allEmps.map(emp => ({ email: emp.email, name: emp.name })).sort((a, b) => a.name.localeCompare(b.name)))
         }
       } else {
         setEmployees([])
@@ -257,6 +265,27 @@ const FilterBar = ({ filters, onFilterChange }) => {
                 {employees.map((emp) => (
                   <option key={emp.email} value={emp.email}>
                     {emp.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Customer Filter - Only for Order page */}
+          {showCustomerFilter && (
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Customer
+              </label>
+              <select
+                value={filters.selectedCustomer || 'ALL'}
+                onChange={(e) => onFilterChange({ ...filters, selectedCustomer: e.target.value })}
+                className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="ALL">All Customers</option>
+                {customers.map((customer) => (
+                  <option key={customer.name} value={customer.name}>
+                    {customer.name}
                   </option>
                 ))}
               </select>

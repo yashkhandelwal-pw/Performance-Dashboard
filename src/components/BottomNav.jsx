@@ -5,6 +5,7 @@ const BottomNav = () => {
 
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: '📊' },
+    { path: '/order', label: 'Order', icon: '🛒' },
     { path: '/sample', label: 'Sample', icon: '📦' },
     { path: '/profile', label: 'Profile', icon: '👤' },
   ]

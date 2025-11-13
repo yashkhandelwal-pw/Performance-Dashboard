@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './utils/auth'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
+import Order from './pages/Order'
 import Sample from './pages/Sample'
 import Profile from './pages/Profile'
 import BottomNav from './components/BottomNav'
@@ -19,6 +20,10 @@ function App() {
         <Route 
           path="/dashboard" 
           element={user ? <Dashboard /> : <Navigate to="/login" />} 
+        />
+        <Route 
+          path="/order" 
+          element={user ? <Order /> : <Navigate to="/login" />} 
         />
         <Route 
           path="/sample" 
