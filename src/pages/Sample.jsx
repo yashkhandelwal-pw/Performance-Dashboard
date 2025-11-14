@@ -312,12 +312,26 @@ const Sample = () => {
                       <td className="px-3 py-2 text-xs text-gray-900">
                         {quota.quotaLeft.toLocaleString()}
                       </td>
-                      <td className="px-3 py-2 text-xs text-gray-900 font-semibold">
+                      <td className="px-3 py-2 text-xs font-semibold">
                         <div className="flex items-center gap-2">
-                          <span>{quota.utilisedPercentage}%</span>
+                          <span className={`${
+                            quota.utilisedPercentage > 100 
+                              ? 'text-red-600' 
+                              : quota.utilisedPercentage >= 70 
+                                ? 'text-yellow-600' 
+                                : 'text-green-600'
+                          }`}>
+                            {quota.utilisedPercentage}%
+                          </span>
                           <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
                             <div 
-                              className="h-full bg-gradient-to-r from-blue-500 to-blue-600"
+                              className={`h-full ${
+                                quota.utilisedPercentage > 100 
+                                  ? 'bg-gradient-to-r from-red-500 to-red-600' 
+                                  : quota.utilisedPercentage >= 70 
+                                    ? 'bg-gradient-to-r from-yellow-500 to-yellow-600' 
+                                    : 'bg-gradient-to-r from-green-500 to-green-600'
+                              }`}
                               style={{ width: `${Math.min(quota.utilisedPercentage, 100)}%` }}
                             />
                           </div>
