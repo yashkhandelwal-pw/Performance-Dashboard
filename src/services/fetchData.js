@@ -453,7 +453,7 @@ export const calculateKPIs = async (filters, useCache = false) => {
   const requests = await getSampleRequests(filters)
 
   // Exclude cancelled orders for Sample Order Placed and Total Request Books
-  const nonCancelledRequests = requests.filter(r => r.status !== 'Cancelled')
+  const nonCancelledRequests = requests.filter(r => r.sample_status !== 'Cancelled')
 
   const kpis = {
     sampleOrderPlaced: nonCancelledRequests.length,
