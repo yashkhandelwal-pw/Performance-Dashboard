@@ -546,7 +546,7 @@ export const getQuotaUtilisation = async (filters) => {
     // Fetch quota data from Sample Request Backend 26-27 table
     const { data, error } = await supabase
       .from('Sample Request Backend 26-27')
-      .select('Employee_Name, Employee_Email_ID, Max_Quota, Quota_Used, Max_Quantity')
+      .select('Receiver_Name, Employee_Email_ID, Max_Quota, Quota_Used, Max_Quantity')
       .in('Employee_Email_ID', salesEmails)
 
     if (error) throw error
@@ -558,7 +558,7 @@ export const getQuotaUtilisation = async (filters) => {
       const utilisedPercentage = assignedQuota > 0 ? (utilisedQuota / assignedQuota) * 100 : 0
 
       return {
-        employeeName: row.Employee_Name || 'Unknown',
+        employeeName: row.Receiver_Name || 'Unknown',
         employeeEmail: row.Employee_Email_ID || '',
         assignedQuota,
         utilisedQuota,
