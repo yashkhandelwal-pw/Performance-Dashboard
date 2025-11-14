@@ -26,6 +26,7 @@ const Order = () => {
     totalBooks: 0,
     totalOrderPlaced: 0,
     orderInProcess: 0,
+    yetToBeDispatched: 0,
     zmApprovalPending: 0,
     orderInTransit: 0,
     orderDelivered: 0,
@@ -254,11 +255,17 @@ const Order = () => {
         {/* KPI Section 2: Order Status Overview */}
         <div className="bg-white rounded-xl p-4 shadow-lg mb-4">
           <h3 className="text-sm font-semibold text-gray-800 mb-3">Order Status Overview</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             <KPIcard
               title="Order InProcess"
               value={kpis.orderInProcess}
               gradient="from-amber-500 to-amber-600"
+              small={true}
+            />
+            <KPIcard
+              title="Yet to be Dispatched"
+              value={kpis.yetToBeDispatched}
+              gradient="from-purple-500 to-purple-600"
               small={true}
             />
             <KPIcard
@@ -288,76 +295,56 @@ const Order = () => {
           </div>
         </div>
 
-        {/* Status Filter Buttons */}
-        <div className="my-4 flex flex-wrap gap-2">
-          {['Order In Progress', 'ZM Approval Pending', 'Dispatched', 'Delivered'].map((status) => (
+        {/* Customer Analysis Table */}
+        <div className="bg-white rounded-xl shadow-lg p-4 mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-base font-semibold text-gray-800">Customer Analysis</h2>
             <button
-              key={status}
-              onClick={() => setStatusFilter(status)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                statusFilter === status
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
-              }`}
-            >
-              {status}
-            </button>
-          ))}
-          <button
-            onClick={() => setStatusFilter('ALL')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              statusFilter === 'ALL'
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
-            }`}
-          >
-            All
-          </button>
-        </div>
-
-        {/* Search Bar */}
-        <div className="mb-4">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="🔍 Search by Order ID..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Order Overview Table */}
-        <div className="mb-6">
-          <div className="flex justify-between items-center mb-3">
-            <h2 className="text-base font-semibold text-gray-800">Order Overview</h2>
-            <button
-              onClick={handleExport}
-              className="bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors flex items-center gap-2"
+              onClick={handleExportCustomer}
+              className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-green-700 transition-colors flex items-center gap-1"
             >
               📥 Export
             </button>
           </div>
-          {loading ? (
-            <div className="flex justify-center items-center h-64 bg-white rounded-xl">
-              <div className="text-xs text-gray-500">Loading...</div>
-            </div>
-          ) : (
-            <DataTable
-              data={filteredData}
-              columns={tableColumns}
-              expandable={true}
-            />
-          )}
+
+          <div className="max-h-[500px] overflow-y-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50 sticky top-0 z-10">
+                <tr>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rank</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer Name</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice Amount</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Books</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {customerAnalysis.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-3 py-8 text-center text-xs text-gray-500">
+                      No customer data available
+                    </td>
+                  </tr>
+                ) : (
+                  customerAnalysis.map((customer, idx) => (
+                    <tr key={idx} className="hover:bg-gray-50">
+                      <td className="px-3 py-2 text-xs text-gray-900 font-medium">
+                        {idx + 1}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-gray-800">
+                        {customer.customerName}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-gray-900 font-semibold">
+                        {formatIndianCurrency(customer.invoiceAmount)}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-gray-900">
+                        {customer.totalBooks.toLocaleString()}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Book Analysis Section */}
@@ -426,56 +413,76 @@ const Order = () => {
           </div>
         </div>
 
-        {/* Customer Analysis Table */}
-        <div className="bg-white rounded-xl shadow-lg p-4">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-base font-semibold text-gray-800">Customer Analysis</h2>
+        {/* Status Filter Buttons */}
+        <div className="my-4 flex flex-wrap gap-2">
+          {['Order In Progress', 'Yet to be Dispatched', 'ZM Approval Pending', 'Dispatched', 'Delivered'].map((status) => (
             <button
-              onClick={handleExportCustomer}
-              className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-green-700 transition-colors flex items-center gap-1"
+              key={status}
+              onClick={() => setStatusFilter(status)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                statusFilter === status
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+              }`}
+            >
+              {status}
+            </button>
+          ))}
+          <button
+            onClick={() => setStatusFilter('ALL')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              statusFilter === 'ALL'
+                ? 'bg-blue-600 text-white'
+                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+            }`}
+          >
+            All
+          </button>
+        </div>
+
+        {/* Search Bar */}
+        <div className="mb-4">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="🔍 Search by Order ID..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Order Overview Table */}
+        <div className="mb-6">
+          <div className="flex justify-between items-center mb-3">
+            <h2 className="text-base font-semibold text-gray-800">Order Overview</h2>
+            <button
+              onClick={handleExport}
+              className="bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-semibold hover:bg-green-700 transition-colors flex items-center gap-2"
             >
               📥 Export
             </button>
           </div>
-
-          <div className="max-h-[500px] overflow-y-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50 sticky top-0 z-10">
-                <tr>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rank</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Customer Name</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice Amount</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Books</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {customerAnalysis.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="px-3 py-8 text-center text-xs text-gray-500">
-                      No customer data available
-                    </td>
-                  </tr>
-                ) : (
-                  customerAnalysis.map((customer, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50">
-                      <td className="px-3 py-2 text-xs text-gray-900 font-medium">
-                        {idx + 1}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-gray-800">
-                        {customer.customerName}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-gray-900 font-semibold">
-                        {formatIndianCurrency(customer.invoiceAmount)}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-gray-900">
-                        {customer.totalBooks.toLocaleString()}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          {loading ? (
+            <div className="flex justify-center items-center h-64 bg-white rounded-xl">
+              <div className="text-xs text-gray-500">Loading...</div>
+            </div>
+          ) : (
+            <DataTable
+              data={filteredData}
+              columns={tableColumns}
+              expandable={true}
+            />
+          )}
         </div>
       </motion.div>
     </div>

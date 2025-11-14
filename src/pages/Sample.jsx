@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useAuthStore } from '../utils/auth'
-import { getSampleRequests, calculateKPIs, getQuotaData } from '../services/fetchData'
+import { getSampleRequests, calculateKPIs, getQuotaData, getQuotaUtilisation } from '../services/fetchData'
 import { getCachedData, setCachedData, generateCacheKey } from '../services/cacheService'
 import { exportToExcel } from '../services/exportExcel'
 import KPIcard from '../components/KPIcard'
@@ -15,6 +15,7 @@ const Sample = () => {
   const [filteredData, setFilteredData] = useState([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('ALL')
+  const [searchQuery, setSearchQuery] = useState('')
   const [kpis, setKpis] = useState({
     sampleOrderPlaced: 0,
     totalRequestBooks: 0,
@@ -29,6 +30,7 @@ const Sample = () => {
     remainingQuota: 0,
     quotaUsedPercentage: 0,
   })
+  const [quotaUtilisation, setQuotaUtilisation] = useState([])
   const [filters, setFilters] = useState({
     startDate: '',
     endDate: '',
@@ -53,6 +55,20 @@ const Sample = () => {
     }
   }, [filters, statusFilter])
 
+  // Search filter effect
+  useEffect(() => {
+    if (searchQuery.trim() === '') {
+      // If no search query, just use the status-filtered data
+      // Don't reset to all data, keep the status filter intact
+    } else {
+      // If there's a search query, filter by submission_id
+      const filtered = data.filter(row =>
+        row.submission_id?.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+      setFilteredData(filtered)
+    }
+  }, [searchQuery, data])
+
   const loadData = async (forceRefresh = false) => {
     setLoading(true)
     try {
@@ -70,19 +86,21 @@ const Sample = () => {
         const cachedData = getCachedData(cacheKey + '_data')
         const cachedKPIs = getCachedData(cacheKey + '_kpis')
         const cachedQuota = getCachedData(cacheKey + '_quota')
+        const cachedQuotaUtil = getCachedData(cacheKey + '_quota_util')
         
-        if (cachedData && cachedKPIs && cachedQuota) {
+        if (cachedData && cachedKPIs && cachedQuota && cachedQuotaUtil) {
           setData(cachedData)
           setFilteredData(cachedData)
           setKpis(cachedKPIs)
           setQuotaData(cachedQuota)
+          setQuotaUtilisation(cachedQuotaUtil)
           setLoading(false)
           return
         }
       }
 
       // Fetch fresh data
-      const [requests, kpiData, quota] = await Promise.all([
+      const [requests, kpiData, quota, quotaUtil] = await Promise.all([
         getSampleRequests(requestFilters),
         calculateKPIs({
           ...filters,
@@ -93,6 +111,11 @@ const Sample = () => {
           ...filters,
           userType,
           userEmail,
+        }),
+        getQuotaUtilisation({
+          ...filters,
+          userType,
+          userEmail,
         })
       ])
       
@@ -100,11 +123,13 @@ const Sample = () => {
       setFilteredData(requests)
       setKpis(kpiData)
       setQuotaData(quota)
+      setQuotaUtilisation(quotaUtil)
 
       // Cache the data
       setCachedData(cacheKey + '_data', requests)
       setCachedData(cacheKey + '_kpis', kpiData)
       setCachedData(cacheKey + '_quota', quota)
+      setCachedData(cacheKey + '_quota_util', quotaUtil)
     } catch (error) {
       console.error('Error loading data:', error)
     } finally {
@@ -249,49 +274,59 @@ const Sample = () => {
           </div>
         </div>
 
-        <MultiKPI kpis={kpis} />
-
-        {/* Status Filter Buttons */}
-        <div className="my-4 flex flex-wrap gap-2">
-          {['Order Placed', 'ZM Approval Pending', 'Dispatched', 'Delivered'].map((status) => (
-            <button
-              key={status}
-              onClick={() => setStatusFilter(status)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                statusFilter === status
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
-              }`}
-            >
-              {status}
-            </button>
-          ))}
-          <button
-            onClick={() => setStatusFilter('ALL')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              statusFilter === 'ALL'
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
-            }`}
-          >
-            All
-          </button>
-        </div>
-
-        {/* Sample Overview Table */}
-        <div className="mb-6">
-          <h2 className="text-base font-semibold text-gray-800 mb-3">Sample Overview</h2>
-          {loading ? (
-            <div className="flex justify-center items-center h-64 bg-white rounded-xl">
-              <div className="text-xs text-gray-500">Loading...</div>
-            </div>
-          ) : (
-            <DataTable
-              data={filteredData}
-              columns={tableColumns}
-              expandable={true}
-            />
-          )}
+        {/* Quota Utilisation Table */}
+        <div className="bg-white rounded-xl shadow-lg p-4 mb-6">
+          <h2 className="text-base font-semibold text-gray-800 mb-4">Quota Utilisation</h2>
+          <div className="max-h-[500px] overflow-y-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50 sticky top-0 z-10">
+                <tr>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee Name</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned Quota</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Utilised Quota</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quota Left</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Utilised %</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {quotaUtilisation.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-3 py-8 text-center text-xs text-gray-500">
+                      No quota data available
+                    </td>
+                  </tr>
+                ) : (
+                  quotaUtilisation.map((quota, idx) => (
+                    <tr key={idx} className="hover:bg-gray-50">
+                      <td className="px-3 py-2 text-xs text-gray-800">
+                        {quota.employeeName}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-gray-900 font-medium">
+                        {quota.assignedQuota.toLocaleString()}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-gray-900">
+                        {quota.utilisedQuota.toLocaleString()}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-gray-900">
+                        {quota.quotaLeft.toLocaleString()}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-gray-900 font-semibold">
+                        <div className="flex items-center gap-2">
+                          <span>{quota.utilisedPercentage}%</span>
+                          <div className="w-16 h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-gradient-to-r from-blue-500 to-blue-600"
+                              style={{ width: `${Math.min(quota.utilisedPercentage, 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Book Analysis Section */}
@@ -358,6 +393,72 @@ const Sample = () => {
               </tbody>
             </table>
           </div>
+        </div>
+
+        <MultiKPI kpis={kpis} />
+
+        {/* Status Filter Buttons */}
+        <div className="my-4 flex flex-wrap gap-2">
+          {['Order Placed', 'ZM Approval Pending', 'Dispatched', 'Delivered'].map((status) => (
+            <button
+              key={status}
+              onClick={() => setStatusFilter(status)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                statusFilter === status
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+              }`}
+            >
+              {status}
+            </button>
+          ))}
+          <button
+            onClick={() => setStatusFilter('ALL')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              statusFilter === 'ALL'
+                ? 'bg-blue-600 text-white'
+                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+            }`}
+          >
+            All
+          </button>
+        </div>
+
+        {/* Search Bar */}
+        <div className="mb-4">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="🔍 Search by Submission ID..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Sample Overview Table */}
+        <div className="mb-6">
+          <h2 className="text-base font-semibold text-gray-800 mb-3">Sample Overview</h2>
+          {loading ? (
+            <div className="flex justify-center items-center h-64 bg-white rounded-xl">
+              <div className="text-xs text-gray-500">Loading...</div>
+            </div>
+          ) : (
+            <DataTable
+              data={filteredData}
+              columns={tableColumns}
+              expandable={true}
+            />
+          )}
         </div>
       </motion.div>
     </div>

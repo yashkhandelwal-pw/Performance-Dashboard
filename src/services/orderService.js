@@ -101,7 +101,9 @@ export const getOrderData = async (filters) => {
     // Apply status filter
     if (filters.statusFilter && filters.statusFilter !== 'ALL') {
       if (filters.statusFilter === 'Order In Progress') {
-        query = query.in('status', ['B2B App Uploaded', 'Request Received', 'Invoice Created'])
+        query = query.eq('status', 'Request Received')
+      } else if (filters.statusFilter === 'Yet to be Dispatched') {
+        query = query.in('status', ['B2B App Uploaded', 'Invoice Created'])
       } else if (filters.statusFilter === 'ZM Approval Pending') {
         query = query.eq('zm_approval', 'Pending Approval')
       } else if (filters.statusFilter === 'Dispatched') {
@@ -129,13 +131,15 @@ export const getOrderData = async (filters) => {
 export const calculateOrderKPIs = async (filters) => {
   const orders = await getOrderData(filters)
 
+  // Exclude cancelled orders for Total Invoice Amount, Total Books, and Total Order Placed
+  const nonCancelledOrders = orders.filter(o => o.status !== 'Cancelled')
+
   const kpis = {
-    totalInvoiceAmount: orders.reduce((sum, o) => sum + (parseFloat(o.order_amount) || 0), 0),
-    totalBooks: orders.reduce((sum, o) => sum + (parseInt(o.no_of_books) || 0), 0),
-    totalOrderPlaced: new Set(orders.map(o => o.submission_id)).size,
-    orderInProcess: orders.filter(o => 
-      ['B2B App Uploaded', 'Request Received', 'Invoice Created'].includes(o.status)
-    ).length,
+    totalInvoiceAmount: nonCancelledOrders.reduce((sum, o) => sum + (parseFloat(o.order_amount) || 0), 0),
+    totalBooks: nonCancelledOrders.reduce((sum, o) => sum + (parseInt(o.no_of_books) || 0), 0),
+    totalOrderPlaced: new Set(nonCancelledOrders.map(o => o.submission_id)).size,
+    orderInProcess: orders.filter(o => o.status === 'Request Received').length,
+    yetToBeDispatched: orders.filter(o => ['B2B App Uploaded', 'Invoice Created'].includes(o.status)).length,
     zmApprovalPending: orders.filter(o => o.zm_approval === 'Pending Approval').length,
     orderInTransit: orders.filter(o => o.status === 'Dispatched with Tracking ID').length,
     orderDelivered: orders.filter(o => o.status === 'Delivered').length,

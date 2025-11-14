@@ -469,3 +469,111 @@ export const calculateKPIs = async (filters, useCache = false) => {
   return kpis
 }
 
+/**
+ * Get Quota Utilisation data for all employees in hierarchy
+ */
+export const getQuotaUtilisation = async (filters) => {
+  try {
+    // Get allowed employee emails based on hierarchy (same logic as getQuotaData)
+    let allowedEmails = []
+
+    if (filters.userType === 'employee') {
+      allowedEmails = [filters.userEmail]
+    } else if (filters.userType === 'reporting_manager') {
+      if (filters.selectedEmployee && filters.selectedEmployee !== 'ALL') {
+        allowedEmails = [filters.selectedEmployee]
+      } else {
+        const employees = await getEmployeesByRM(filters.userEmail)
+        allowedEmails = employees.map(e => e.email)
+      }
+    } else if (filters.userType === 'zonal_manager') {
+      if (filters.selectedRM && filters.selectedRM !== 'ALL') {
+        const employees = await getEmployeesByRM(filters.selectedRM)
+        allowedEmails = employees.map(e => e.email)
+        
+        if (filters.selectedEmployee && filters.selectedEmployee !== 'ALL') {
+          allowedEmails = [filters.selectedEmployee]
+        }
+      } else if (filters.selectedEmployee && filters.selectedEmployee !== 'ALL') {
+        allowedEmails = [filters.selectedEmployee]
+      } else {
+        // Get all employees under ZM
+        const rms = await getReportingManagersByZM(filters.userEmail)
+        const allEmails = []
+        for (const rm of rms) {
+          const employees = await getEmployeesByRM(rm.email)
+          allEmails.push(...employees.map(e => e.email))
+        }
+        allowedEmails = [...new Set(allEmails)]
+      }
+    } else if (filters.userType === 'program_team') {
+      let employees = await getAllActiveSalesEmployees()
+
+      if (filters.selectedZM && filters.selectedZM !== 'ALL') {
+        employees = employees.filter(emp => emp.zonal_manager_email === filters.selectedZM)
+      }
+
+      if (filters.selectedRM && filters.selectedRM !== 'ALL') {
+        employees = employees.filter(emp => emp.reporting_manager_email === filters.selectedRM)
+      }
+
+      if (filters.selectedEmployee && filters.selectedEmployee !== 'ALL') {
+        employees = employees.filter(emp => emp.email === filters.selectedEmployee)
+      }
+
+      allowedEmails = employees.map(emp => emp.email)
+    }
+
+    allowedEmails = [...new Set(allowedEmails)]
+
+    if (allowedEmails.length === 0) {
+      return []
+    }
+
+    // Filter to only Sales team employees
+    const { data: salesEmployees } = await supabase
+      .from('emp_record')
+      .select('email, name')
+      .in('email', allowedEmails)
+      .eq('team', 'Sales')
+
+    const salesEmails = salesEmployees?.map(e => e.email) || []
+
+    if (salesEmails.length === 0) {
+      return []
+    }
+
+    // Fetch quota data from Sample Request Backend 26-27 table
+    const { data, error } = await supabase
+      .from('Sample Request Backend 26-27')
+      .select('Employee_Name, Employee_Email_ID, Max_Quota, Quota_Used, Max_Quantity')
+      .in('Employee_Email_ID', salesEmails)
+
+    if (error) throw error
+
+    const quotaData = (data || []).map(row => {
+      const assignedQuota = parseFloat(row.Max_Quota) || 0
+      const utilisedQuota = parseFloat(row.Quota_Used) || 0
+      const quotaLeft = parseFloat(row.Max_Quantity) || 0
+      const utilisedPercentage = assignedQuota > 0 ? (utilisedQuota / assignedQuota) * 100 : 0
+
+      return {
+        employeeName: row.Employee_Name || 'Unknown',
+        employeeEmail: row.Employee_Email_ID || '',
+        assignedQuota,
+        utilisedQuota,
+        quotaLeft,
+        utilisedPercentage: Math.round(utilisedPercentage * 100) / 100, // Round to 2 decimal places
+      }
+    })
+
+    // Sort by utilised percentage (DESC)
+    quotaData.sort((a, b) => b.utilisedPercentage - a.utilisedPercentage)
+
+    return quotaData
+  } catch (error) {
+    console.error('Error fetching quota utilisation:', error)
+    return []
+  }
+}
+
