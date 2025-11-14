@@ -253,21 +253,27 @@ export const getSampleRequests = async (filters) => {
         allowedEmails = [...new Set(allEmails)] // Remove duplicates
       }
     } else if (filters.userType === 'program_team') {
-      let employees = await getAllActiveSalesEmployees()
-
-      if (filters.selectedZM && filters.selectedZM !== 'ALL') {
-        employees = employees.filter(emp => emp.zonal_manager_email === filters.selectedZM)
-      }
-
       if (filters.selectedRM && filters.selectedRM !== 'ALL') {
-        employees = employees.filter(emp => emp.reporting_manager_email === filters.selectedRM)
-      }
+        // Use getEmployeesByRM which includes the RM themselves
+        const employees = await getEmployeesByRM(filters.selectedRM)
+        allowedEmails = employees.map(e => e.email)
+        
+        if (filters.selectedEmployee && filters.selectedEmployee !== 'ALL') {
+          allowedEmails = [filters.selectedEmployee]
+        }
+      } else {
+        let employees = await getAllActiveSalesEmployees()
 
-      if (filters.selectedEmployee && filters.selectedEmployee !== 'ALL') {
-        employees = employees.filter(emp => emp.email === filters.selectedEmployee)
-      }
+        if (filters.selectedZM && filters.selectedZM !== 'ALL') {
+          employees = employees.filter(emp => emp.zonal_manager_email === filters.selectedZM)
+        }
 
-      allowedEmails = employees.map(emp => emp.email)
+        if (filters.selectedEmployee && filters.selectedEmployee !== 'ALL') {
+          employees = employees.filter(emp => emp.email === filters.selectedEmployee)
+        }
+
+        allowedEmails = employees.map(emp => emp.email)
+      }
     }
 
     allowedEmails = [...new Set(allowedEmails)]
@@ -368,21 +374,27 @@ export const getQuotaData = async (filters) => {
         allowedEmails = [...new Set(allEmails)]
       }
     } else if (filters.userType === 'program_team') {
-      let employees = await getAllActiveSalesEmployees()
-
-      if (filters.selectedZM && filters.selectedZM !== 'ALL') {
-        employees = employees.filter(emp => emp.zonal_manager_email === filters.selectedZM)
-      }
-
       if (filters.selectedRM && filters.selectedRM !== 'ALL') {
-        employees = employees.filter(emp => emp.reporting_manager_email === filters.selectedRM)
-      }
+        // Use getEmployeesByRM which includes the RM themselves
+        const employees = await getEmployeesByRM(filters.selectedRM)
+        allowedEmails = employees.map(e => e.email)
+        
+        if (filters.selectedEmployee && filters.selectedEmployee !== 'ALL') {
+          allowedEmails = [filters.selectedEmployee]
+        }
+      } else {
+        let employees = await getAllActiveSalesEmployees()
 
-      if (filters.selectedEmployee && filters.selectedEmployee !== 'ALL') {
-        employees = employees.filter(emp => emp.email === filters.selectedEmployee)
-      }
+        if (filters.selectedZM && filters.selectedZM !== 'ALL') {
+          employees = employees.filter(emp => emp.zonal_manager_email === filters.selectedZM)
+        }
 
-      allowedEmails = employees.map(emp => emp.email)
+        if (filters.selectedEmployee && filters.selectedEmployee !== 'ALL') {
+          employees = employees.filter(emp => emp.email === filters.selectedEmployee)
+        }
+
+        allowedEmails = employees.map(emp => emp.email)
+      }
     }
 
     allowedEmails = [...new Set(allowedEmails)]
@@ -507,21 +519,27 @@ export const getQuotaUtilisation = async (filters) => {
         allowedEmails = [...new Set(allEmails)]
       }
     } else if (filters.userType === 'program_team') {
-      let employees = await getAllActiveSalesEmployees()
-
-      if (filters.selectedZM && filters.selectedZM !== 'ALL') {
-        employees = employees.filter(emp => emp.zonal_manager_email === filters.selectedZM)
-      }
-
       if (filters.selectedRM && filters.selectedRM !== 'ALL') {
-        employees = employees.filter(emp => emp.reporting_manager_email === filters.selectedRM)
-      }
+        // Use getEmployeesByRM which includes the RM themselves
+        const employees = await getEmployeesByRM(filters.selectedRM)
+        allowedEmails = employees.map(e => e.email)
+        
+        if (filters.selectedEmployee && filters.selectedEmployee !== 'ALL') {
+          allowedEmails = [filters.selectedEmployee]
+        }
+      } else {
+        let employees = await getAllActiveSalesEmployees()
 
-      if (filters.selectedEmployee && filters.selectedEmployee !== 'ALL') {
-        employees = employees.filter(emp => emp.email === filters.selectedEmployee)
-      }
+        if (filters.selectedZM && filters.selectedZM !== 'ALL') {
+          employees = employees.filter(emp => emp.zonal_manager_email === filters.selectedZM)
+        }
 
-      allowedEmails = employees.map(emp => emp.email)
+        if (filters.selectedEmployee && filters.selectedEmployee !== 'ALL') {
+          employees = employees.filter(emp => emp.email === filters.selectedEmployee)
+        }
+
+        allowedEmails = employees.map(emp => emp.email)
+      }
     }
 
     allowedEmails = [...new Set(allowedEmails)]
