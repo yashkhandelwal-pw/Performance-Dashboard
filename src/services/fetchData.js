@@ -396,11 +396,29 @@ export const getQuotaData = async (filters) => {
       }
     }
 
-    // Fetch quota data from Sample Request Backend 26-27 table
+    // Filter to only Sales team employees for quota calculation
+    const { data: salesEmployees } = await supabase
+      .from('emp_record')
+      .select('email')
+      .in('email', allowedEmails)
+      .eq('team', 'Sales')
+
+    const salesEmails = salesEmployees?.map(e => e.email) || []
+
+    if (salesEmails.length === 0) {
+      return {
+        samplingQuota: 0,
+        quotaUsed: 0,
+        remainingQuota: 0,
+        quotaUsedPercentage: 0,
+      }
+    }
+
+    // Fetch quota data from Sample Request Backend 26-27 table (Sales team only)
     const { data, error } = await supabase
       .from('Sample Request Backend 26-27')
       .select('Max_Quota, Quota_Used')
-      .in('Employee_Email_ID', allowedEmails)
+      .in('Employee_Email_ID', salesEmails)
 
     if (error) throw error
 
@@ -434,9 +452,12 @@ export const getQuotaData = async (filters) => {
 export const calculateKPIs = async (filters, useCache = false) => {
   const requests = await getSampleRequests(filters)
 
+  // Exclude cancelled orders for Sample Order Placed and Total Request Books
+  const nonCancelledRequests = requests.filter(r => r.status !== 'Cancelled')
+
   const kpis = {
-    sampleOrderPlaced: requests.length,
-    totalRequestBooks: requests.reduce((sum, r) => sum + (parseInt(r.total_books) || 0), 0),
+    sampleOrderPlaced: nonCancelledRequests.length,
+    totalRequestBooks: nonCancelledRequests.reduce((sum, r) => sum + (parseInt(r.total_books) || 0), 0),
     orderReceived: requests.filter(r => r.sample_status === 'Request Received').length,
     zmApprovalPending: requests.filter(
       r => r.sample_status === 'Request Received' && r.zm_approval === 'Pending Approval'

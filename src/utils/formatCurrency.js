@@ -25,3 +25,4 @@ export const formatIndianCurrency = (amount) => {
   return (isNegative ? '-' : '') + '₹' + result
 }
 
+

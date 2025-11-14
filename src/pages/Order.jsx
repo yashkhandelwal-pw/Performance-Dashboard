@@ -229,7 +229,7 @@ const Order = () => {
         {/* KPI Section 1: Order Overview */}
         <div className="bg-white rounded-xl p-4 shadow-lg mb-4">
           <h3 className="text-sm font-semibold text-gray-800 mb-3">Order Overview</h3>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <KPIcard
               title="Total Invoice Amount"
               value={formatIndianCurrency(kpis.totalInvoiceAmount)}
