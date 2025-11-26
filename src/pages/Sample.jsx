@@ -282,6 +282,14 @@ const Sample = () => {
     { key: 'delivered_date', label: 'Delivered', render: (val) => val ? new Date(val).toLocaleDateString() : '-' },
   ]
 
+  const submissionTableColumns = [
+    { key: 'timestamp', label: 'Date', render: (val) => val ? new Date(val).toLocaleDateString() : '-' },
+    { key: 'submission_id', label: 'Submission ID' },
+    { key: 'employee_email', label: 'Email', render: (val) => val ? val.substring(0, 20) + '...' : '-' },
+    { key: 'school_name', label: 'School / Distributor Name' },
+    { key: 'total_books', label: 'Total Books' },
+  ]
+
   return (
     <div className="min-h-screen p-4 pb-24">
       <motion.div
@@ -435,7 +443,7 @@ const Sample = () => {
         </div>
 
         {/* Sample Submission Table */}
-        <div className="bg-white rounded-xl shadow-lg p-4 mb-6">
+        <div className="mb-6">
           <h2 className="text-base font-semibold text-gray-800 mb-4">Sample Submission</h2>
           
           {/* Search Bar */}
@@ -459,48 +467,17 @@ const Sample = () => {
             </div>
           </div>
 
-          <div className="max-h-[500px] overflow-y-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50 sticky top-0 z-10">
-                <tr>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Submission ID</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">School / Distributor Name</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Books</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredSubmissions.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-3 py-8 text-center text-xs text-gray-500">
-                      No submission data available
-                    </td>
-                  </tr>
-                ) : (
-                  filteredSubmissions.map((submission, idx) => (
-                    <tr key={idx} className="hover:bg-gray-50">
-                      <td className="px-3 py-2 text-xs text-gray-900">
-                        {submission.timestamp ? new Date(submission.timestamp).toLocaleDateString() : '-'}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-gray-800">
-                        {submission.submission_id || '-'}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-gray-800">
-                        {submission.employee_email ? submission.employee_email.substring(0, 20) + '...' : '-'}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-gray-800">
-                        {submission.school_name || '-'}
-                      </td>
-                      <td className="px-3 py-2 text-xs text-gray-900 font-semibold">
-                        {submission.total_books || 0}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          {loading ? (
+            <div className="flex justify-center items-center h-64 bg-white rounded-xl">
+              <div className="text-xs text-gray-500">Loading...</div>
+            </div>
+          ) : (
+            <DataTable
+              data={filteredSubmissions}
+              columns={submissionTableColumns}
+              expandable={true}
+            />
+          )}
         </div>
 
         {/* Status Filter Buttons */}
