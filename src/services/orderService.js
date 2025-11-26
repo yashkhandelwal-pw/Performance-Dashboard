@@ -69,7 +69,7 @@ export const getOrderData = async (filters) => {
 
     allowedEmails = [...new Set(allowedEmails)]
 
-    // Verify employees are Active and in Sales team
+    // Verify employees are Active and in Sales team with correct line_of_business
     if (allowedEmails.length > 0) {
       const { data: validEmployees } = await supabase
         .from('emp_record')
@@ -77,6 +77,7 @@ export const getOrderData = async (filters) => {
         .in('email', allowedEmails)
         .eq('status', 'Active')
         .eq('team', 'Sales')
+        .in('line_of_business', ['K8 & Test Prep', 'K8'])
 
       allowedEmails = validEmployees?.map(e => e.email) || []
     }

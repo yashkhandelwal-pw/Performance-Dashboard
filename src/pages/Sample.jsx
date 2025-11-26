@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useAuthStore } from '../utils/auth'
-import { getSampleRequests, calculateKPIs, getQuotaData, getQuotaUtilisation } from '../services/fetchData'
+import { getSampleRequests, calculateKPIs, getQuotaData, getQuotaUtilisation, getSampleSubmissions, calculateSampleSubmissionKPIs } from '../services/fetchData'
 import { getCachedData, setCachedData, generateCacheKey } from '../services/cacheService'
 import { exportToExcel } from '../services/exportExcel'
 import KPIcard from '../components/KPIcard'
@@ -31,6 +31,14 @@ const Sample = () => {
     quotaUsedPercentage: 0,
   })
   const [quotaUtilisation, setQuotaUtilisation] = useState([])
+  const [sampleSubmissions, setSampleSubmissions] = useState([])
+  const [filteredSubmissions, setFilteredSubmissions] = useState([])
+  const [submissionSearchQuery, setSubmissionSearchQuery] = useState('')
+  const [submissionKPIs, setSubmissionKPIs] = useState({
+    totalSampleBooksSubmitted: 0,
+    uniqueSchools: 0,
+    uniqueDistributors: 0,
+  })
   const [filters, setFilters] = useState({
     startDate: '',
     endDate: '',
@@ -43,6 +51,7 @@ const Sample = () => {
   })
   const [isInitialLoad, setIsInitialLoad] = useState(true)
   const [bookAnalysisView, setBookAnalysisView] = useState('Top 10') // 'Top 10' or 'Low 10'
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     // On initial load, always fetch fresh data
@@ -58,8 +67,8 @@ const Sample = () => {
   // Search filter effect
   useEffect(() => {
     if (searchQuery.trim() === '') {
-      // If no search query, just use the status-filtered data
-      // Don't reset to all data, keep the status filter intact
+      // If no search query, reset to all data
+      setFilteredData(data)
     } else {
       // If there's a search query, filter by submission_id
       const filtered = data.filter(row =>
@@ -68,6 +77,18 @@ const Sample = () => {
       setFilteredData(filtered)
     }
   }, [searchQuery, data])
+
+  // Submission search filter effect
+  useEffect(() => {
+    if (submissionSearchQuery.trim() === '') {
+      setFilteredSubmissions(sampleSubmissions)
+    } else {
+      const filtered = sampleSubmissions.filter(row =>
+        row.school_name?.toLowerCase().includes(submissionSearchQuery.toLowerCase())
+      )
+      setFilteredSubmissions(filtered)
+    }
+  }, [submissionSearchQuery, sampleSubmissions])
 
   const loadData = async (forceRefresh = false) => {
     setLoading(true)
@@ -87,20 +108,25 @@ const Sample = () => {
         const cachedKPIs = getCachedData(cacheKey + '_kpis')
         const cachedQuota = getCachedData(cacheKey + '_quota')
         const cachedQuotaUtil = getCachedData(cacheKey + '_quota_util')
+        const cachedSubmissions = getCachedData(cacheKey + '_submissions')
+        const cachedSubmissionKPIs = getCachedData(cacheKey + '_submission_kpis')
         
-        if (cachedData && cachedKPIs && cachedQuota && cachedQuotaUtil) {
+        if (cachedData && cachedKPIs && cachedQuota && cachedQuotaUtil && cachedSubmissions && cachedSubmissionKPIs) {
           setData(cachedData)
           setFilteredData(cachedData)
           setKpis(cachedKPIs)
           setQuotaData(cachedQuota)
           setQuotaUtilisation(cachedQuotaUtil)
+          setSampleSubmissions(cachedSubmissions)
+          setFilteredSubmissions(cachedSubmissions)
+          setSubmissionKPIs(cachedSubmissionKPIs)
           setLoading(false)
           return
         }
       }
 
-      // Fetch fresh data
-      const [requests, kpiData, quota, quotaUtil] = await Promise.all([
+      // Fetch fresh data - handle errors individually
+      const [requests, kpiData, quota, quotaUtil, submissions, submissionKpiData] = await Promise.allSettled([
         getSampleRequests(requestFilters),
         calculateKPIs({
           ...filters,
@@ -116,22 +142,61 @@ const Sample = () => {
           ...filters,
           userType,
           userEmail,
+        }),
+        getSampleSubmissions({
+          ...filters,
+          userType,
+          userEmail,
+        }),
+        calculateSampleSubmissionKPIs({
+          ...filters,
+          userType,
+          userEmail,
         })
       ])
       
-      setData(requests)
-      setFilteredData(requests)
-      setKpis(kpiData)
-      setQuotaData(quota)
-      setQuotaUtilisation(quotaUtil)
+      setData(requests.status === 'fulfilled' ? requests.value : [])
+      setFilteredData(requests.status === 'fulfilled' ? requests.value : [])
+      setKpis(kpiData.status === 'fulfilled' ? kpiData.value : {
+        sampleOrderPlaced: 0,
+        totalRequestBooks: 0,
+        orderReceived: 0,
+        zmApprovalPending: 0,
+        dispatched: 0,
+        delivered: 0,
+      })
+      setQuotaData(quota.status === 'fulfilled' ? quota.value : {
+        samplingQuota: 0,
+        quotaUsed: 0,
+        remainingQuota: 0,
+        quotaUsedPercentage: 0,
+      })
+      setQuotaUtilisation(quotaUtil.status === 'fulfilled' ? quotaUtil.value : [])
+      setSampleSubmissions(submissions.status === 'fulfilled' ? submissions.value : [])
+      setFilteredSubmissions(submissions.status === 'fulfilled' ? submissions.value : [])
+      setSubmissionKPIs(submissionKpiData.status === 'fulfilled' ? submissionKpiData.value : {
+        totalSampleBooksSubmitted: 0,
+        uniqueSchools: 0,
+        uniqueDistributors: 0,
+      })
 
-      // Cache the data
-      setCachedData(cacheKey + '_data', requests)
-      setCachedData(cacheKey + '_kpis', kpiData)
-      setCachedData(cacheKey + '_quota', quota)
-      setCachedData(cacheKey + '_quota_util', quotaUtil)
+      // Cache the data only if successful
+      if (requests.status === 'fulfilled') {
+        setCachedData(cacheKey + '_data', requests.value)
+        setCachedData(cacheKey + '_kpis', kpiData.status === 'fulfilled' ? kpiData.value : {})
+        setCachedData(cacheKey + '_quota', quota.status === 'fulfilled' ? quota.value : {})
+        setCachedData(cacheKey + '_quota_util', quotaUtil.status === 'fulfilled' ? quotaUtil.value : [])
+        setCachedData(cacheKey + '_submissions', submissions.status === 'fulfilled' ? submissions.value : [])
+        setCachedData(cacheKey + '_submission_kpis', submissionKpiData.status === 'fulfilled' ? submissionKpiData.value : {})
+      }
     } catch (error) {
       console.error('Error loading data:', error)
+      setError(error.message || 'Failed to load data. Please check the browser console for details.')
+      // Set default values on error
+      setData([])
+      setFilteredData([])
+      setSampleSubmissions([])
+      setFilteredSubmissions([])
     } finally {
       setLoading(false)
     }
@@ -234,12 +299,18 @@ const Sample = () => {
           </button>
         </div>
 
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
+            Error: {error}
+          </div>
+        )}
+
         <FilterBar filters={filters} onFilterChange={setFilters} />
 
         {/* KPIs - Small format with Quota - All same size */}
         <div className="bg-white rounded-xl p-4 shadow-lg mb-4">
           <h3 className="text-sm font-semibold text-gray-800 mb-3">Sample Overview</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             <KPIcard
               title="Sample Order Placed"
               value={kpis.sampleOrderPlaced}
@@ -269,6 +340,24 @@ const Sample = () => {
               title="Remaining Quota"
               value={quotaData.remainingQuota}
               gradient="from-emerald-500 to-emerald-600"
+              small={true}
+            />
+            <KPIcard
+              title="Total Sample Books Submitted"
+              value={submissionKPIs.totalSampleBooksSubmitted}
+              gradient="from-blue-500 to-blue-600"
+              small={true}
+            />
+            <KPIcard
+              title="Sample Submitted - Unique Schools"
+              value={submissionKPIs.uniqueSchools}
+              gradient="from-cyan-500 to-cyan-600"
+              small={true}
+            />
+            <KPIcard
+              title="Sample Submitted - Unique Distributors"
+              value={submissionKPIs.uniqueDistributors}
+              gradient="from-violet-500 to-violet-600"
               small={true}
             />
           </div>
@@ -345,10 +434,143 @@ const Sample = () => {
           </div>
         </div>
 
-        {/* Book Analysis Section */}
-        <div className="bg-white rounded-xl shadow-lg p-4">
+        {/* Sample Submission Table */}
+        <div className="bg-white rounded-xl shadow-lg p-4 mb-6">
+          <h2 className="text-base font-semibold text-gray-800 mb-4">Sample Submission</h2>
+          
+          {/* Search Bar */}
+          <div className="mb-4">
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="🔍 Search by School / Distributor Name..."
+                value={submissionSearchQuery}
+                onChange={(e) => setSubmissionSearchQuery(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              {submissionSearchQuery && (
+                <button
+                  onClick={() => setSubmissionSearchQuery('')}
+                  className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="max-h-[500px] overflow-y-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50 sticky top-0 z-10">
+                <tr>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Submission ID</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">School / Distributor Name</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Books</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredSubmissions.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-3 py-8 text-center text-xs text-gray-500">
+                      No submission data available
+                    </td>
+                  </tr>
+                ) : (
+                  filteredSubmissions.map((submission, idx) => (
+                    <tr key={idx} className="hover:bg-gray-50">
+                      <td className="px-3 py-2 text-xs text-gray-900">
+                        {submission.timestamp ? new Date(submission.timestamp).toLocaleDateString() : '-'}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-gray-800">
+                        {submission.submission_id || '-'}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-gray-800">
+                        {submission.employee_email ? submission.employee_email.substring(0, 20) + '...' : '-'}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-gray-800">
+                        {submission.school_name || '-'}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-gray-900 font-semibold">
+                        {submission.total_books || 0}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Status Filter Buttons */}
+        <div className="my-4 flex flex-wrap gap-2">
+          {['Order Placed', 'ZM Approval Pending', 'Dispatched', 'Delivered'].map((status) => (
+            <button
+              key={status}
+              onClick={() => setStatusFilter(status)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                statusFilter === status
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+              }`}
+            >
+              {status}
+            </button>
+          ))}
+          <button
+            onClick={() => setStatusFilter('ALL')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              statusFilter === 'ALL'
+                ? 'bg-blue-600 text-white'
+                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+            }`}
+          >
+            All
+          </button>
+        </div>
+
+        {/* Search Bar */}
+        <div className="mb-4">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="🔍 Search by Submission ID..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Sample Request tracking Table */}
+        <div className="mb-6">
+          <h2 className="text-base font-semibold text-gray-800 mb-3">Sample Request tracking</h2>
+          {loading ? (
+            <div className="flex justify-center items-center h-64 bg-white rounded-xl">
+              <div className="text-xs text-gray-500">Loading...</div>
+            </div>
+          ) : (
+            <DataTable
+              data={filteredData}
+              columns={tableColumns}
+              expandable={true}
+            />
+          )}
+        </div>
+
+        {/* Sample Request SKU Analysis Section */}
+        <div className="bg-white rounded-xl shadow-lg p-4 mb-6">
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-base font-semibold text-gray-800">Book Analysis</h2>
+            <h2 className="text-base font-semibold text-gray-800">Sample Request SKU Analysis</h2>
             <div className="flex gap-2">
               <button
                 onClick={() => setBookAnalysisView('Top 10')}
@@ -409,70 +631,6 @@ const Sample = () => {
               </tbody>
             </table>
           </div>
-        </div>
-
-        {/* Status Filter Buttons */}
-        <div className="my-4 flex flex-wrap gap-2">
-          {['Order Placed', 'ZM Approval Pending', 'Dispatched', 'Delivered'].map((status) => (
-            <button
-              key={status}
-              onClick={() => setStatusFilter(status)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                statusFilter === status
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
-              }`}
-            >
-              {status}
-            </button>
-          ))}
-          <button
-            onClick={() => setStatusFilter('ALL')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              statusFilter === 'ALL'
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
-            }`}
-          >
-            All
-          </button>
-        </div>
-
-        {/* Search Bar */}
-        <div className="mb-4">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="🔍 Search by Submission ID..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Sample Overview Table */}
-        <div className="mb-6">
-          <h2 className="text-base font-semibold text-gray-800 mb-3">Sample Overview</h2>
-          {loading ? (
-            <div className="flex justify-center items-center h-64 bg-white rounded-xl">
-              <div className="text-xs text-gray-500">Loading...</div>
-            </div>
-          ) : (
-            <DataTable
-              data={filteredData}
-              columns={tableColumns}
-              expandable={true}
-            />
-          )}
         </div>
       </motion.div>
     </div>

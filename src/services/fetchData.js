@@ -62,23 +62,67 @@ export const getUserType = async (email) => {
  */
 export const getEmployeesByRM = async (rmEmail) => {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('emp_record')
       .select('email, name')
       .eq('reporting_manager_email', rmEmail)
       .eq('status', 'Active')
       .eq('team', 'Sales')
+    
+    // Try to add line_of_business filter, but handle if column doesn't exist
+    try {
+      query = query.in('line_of_business', ['K8 & Test Prep', 'K8'])
+    } catch (e) {
+      console.warn('line_of_business column may not exist, skipping filter')
+    }
+    
+    const { data, error } = await query
 
-    if (error) throw error
+    if (error) {
+      // If error is about column not found, retry without line_of_business filter
+      if (error.message && error.message.includes('column') && error.message.includes('line_of_business')) {
+        const { data: retryData, error: retryError } = await supabase
+          .from('emp_record')
+          .select('email, name')
+          .eq('reporting_manager_email', rmEmail)
+          .eq('status', 'Active')
+          .eq('team', 'Sales')
+        
+        if (retryError) throw retryError
+        const employees = retryData || []
+        
+        // Include the RM themselves
+        const { data: rmData } = await supabase
+          .from('emp_record')
+          .select('email, name')
+          .eq('email', rmEmail)
+          .eq('status', 'Active')
+          .eq('team', 'Sales')
+          .single()
+        
+        if (rmData) {
+          employees.push(rmData)
+        }
+        return uniqueByEmail(employees)
+      }
+      throw error
+    }
 
     // Include the RM themselves
-    const { data: rmData } = await supabase
+    let rmQuery = supabase
       .from('emp_record')
       .select('email, name')
       .eq('email', rmEmail)
       .eq('status', 'Active')
       .eq('team', 'Sales')
-      .single()
+    
+    try {
+      rmQuery = rmQuery.in('line_of_business', ['K8 & Test Prep', 'K8'])
+    } catch (e) {
+      // Column doesn't exist, continue without filter
+    }
+    
+    const { data: rmData } = await rmQuery.single()
 
     const employees = data || []
     if (rmData) {
@@ -104,6 +148,7 @@ export const getReportingManagersByZM = async (zmEmail) => {
       .eq('zonal_manager_email', zmEmail)
       .eq('status', 'Active')
       .eq('team', 'Sales')
+      .in('line_of_business', ['K8 & Test Prep', 'K8'])
       .not('reporting_manager_email', 'is', null)
 
     if (error) throw error
@@ -139,6 +184,7 @@ export const getAllActiveSalesEmployees = async () => {
       .select('email, name, reporting_manager, reporting_manager_email, zonal_manager, zonal_manager_email, status, team')
       .eq('status', 'Active')
       .eq('team', 'Sales')
+      .in('line_of_business', ['K8 & Test Prep', 'K8'])
 
     if (error) throw error
     return uniqueByEmail(data || [])
@@ -155,6 +201,7 @@ export const getAllReportingManagers = async () => {
       .select('reporting_manager, reporting_manager_email')
       .eq('status', 'Active')
       .eq('team', 'Sales')
+      .in('line_of_business', ['K8 & Test Prep', 'K8'])
       .not('reporting_manager_email', 'is', null)
 
     if (error) throw error
@@ -180,6 +227,7 @@ export const getAllZonalManagers = async () => {
       .select('zonal_manager, zonal_manager_email')
       .eq('status', 'Active')
       .eq('team', 'Sales')
+      .in('line_of_business', ['K8 & Test Prep', 'K8'])
       .not('zonal_manager_email', 'is', null)
 
     if (error) throw error
@@ -206,6 +254,7 @@ export const getEmployeesByZM = async (zmEmail) => {
       .eq('zonal_manager_email', zmEmail)
       .eq('status', 'Active')
       .eq('team', 'Sales')
+      .in('line_of_business', ['K8 & Test Prep', 'K8'])
 
     if (error) throw error
     return uniqueByEmail(data || [])
@@ -278,7 +327,7 @@ export const getSampleRequests = async (filters) => {
 
     allowedEmails = [...new Set(allowedEmails)]
 
-    // Verify employees are Active and in Sales team
+    // Verify employees are Active and in Sales team with correct line_of_business
     if (allowedEmails.length > 0) {
       const { data: validEmployees } = await supabase
         .from('emp_record')
@@ -286,6 +335,7 @@ export const getSampleRequests = async (filters) => {
         .in('email', allowedEmails)
         .eq('status', 'Active')
         .eq('team', 'Sales')
+        .in('line_of_business', ['K8 & Test Prep', 'K8'])
 
       allowedEmails = validEmployees?.map(e => e.email) || []
     }
@@ -408,12 +458,13 @@ export const getQuotaData = async (filters) => {
       }
     }
 
-    // Filter to only Sales team employees for quota calculation
+    // Filter to only Sales team employees for quota calculation with correct line_of_business
     const { data: salesEmployees } = await supabase
       .from('emp_record')
       .select('email')
       .in('email', allowedEmails)
       .eq('team', 'Sales')
+      .in('line_of_business', ['K8 & Test Prep', 'K8'])
 
     const salesEmails = salesEmployees?.map(e => e.email) || []
 
@@ -548,12 +599,13 @@ export const getQuotaUtilisation = async (filters) => {
       return []
     }
 
-    // Filter to only Sales team employees
+    // Filter to only Sales team employees with correct line_of_business
     const { data: salesEmployees } = await supabase
       .from('emp_record')
       .select('email, name')
       .in('email', allowedEmails)
       .eq('team', 'Sales')
+      .in('line_of_business', ['K8 & Test Prep', 'K8'])
 
     const salesEmails = salesEmployees?.map(e => e.email) || []
 
@@ -592,6 +644,148 @@ export const getQuotaUtilisation = async (filters) => {
   } catch (error) {
     console.error('Error fetching quota utilisation:', error)
     return []
+  }
+}
+
+/**
+ * Get sample submissions based on hierarchy and filters
+ */
+export const getSampleSubmissions = async (filters) => {
+  try {
+    // First, get employee emails based on hierarchy (same logic as getSampleRequests)
+    let allowedEmails = []
+
+    if (filters.userType === 'employee') {
+      allowedEmails = [filters.userEmail]
+    } else if (filters.userType === 'reporting_manager') {
+      if (filters.selectedEmployee && filters.selectedEmployee !== 'ALL') {
+        allowedEmails = [filters.selectedEmployee]
+      } else {
+        const employees = await getEmployeesByRM(filters.userEmail)
+        allowedEmails = employees.map(e => e.email)
+      }
+    } else if (filters.userType === 'zonal_manager') {
+      if (filters.selectedRM && filters.selectedRM !== 'ALL') {
+        const employees = await getEmployeesByRM(filters.selectedRM)
+        allowedEmails = employees.map(e => e.email)
+
+        if (filters.selectedEmployee && filters.selectedEmployee !== 'ALL') {
+          allowedEmails = [filters.selectedEmployee]
+        }
+      } else if (filters.selectedEmployee && filters.selectedEmployee !== 'ALL') {
+        allowedEmails = [filters.selectedEmployee]
+      } else {
+        // Get all employees under ZM
+        const rms = await getReportingManagersByZM(filters.userEmail)
+        const allEmails = []
+        for (const rm of rms) {
+          const employees = await getEmployeesByRM(rm.email)
+          allEmails.push(...employees.map(e => e.email))
+        }
+        allowedEmails = [...new Set(allEmails)]
+      }
+    } else if (filters.userType === 'program_team') {
+      if (filters.selectedRM && filters.selectedRM !== 'ALL') {
+        const employees = await getEmployeesByRM(filters.selectedRM)
+        allowedEmails = employees.map(e => e.email)
+        
+        if (filters.selectedEmployee && filters.selectedEmployee !== 'ALL') {
+          allowedEmails = [filters.selectedEmployee]
+        }
+      } else {
+        let employees = await getAllActiveSalesEmployees()
+
+        if (filters.selectedZM && filters.selectedZM !== 'ALL') {
+          employees = employees.filter(emp => emp.zonal_manager_email === filters.selectedZM)
+        }
+
+        if (filters.selectedEmployee && filters.selectedEmployee !== 'ALL') {
+          employees = employees.filter(emp => emp.email === filters.selectedEmployee)
+        }
+
+        allowedEmails = employees.map(emp => emp.email)
+      }
+    }
+
+    allowedEmails = [...new Set(allowedEmails)]
+
+    // Verify employees are Active and in Sales team with correct line_of_business
+    if (allowedEmails.length > 0) {
+      const { data: validEmployees } = await supabase
+        .from('emp_record')
+        .select('email')
+        .in('email', allowedEmails)
+        .eq('status', 'Active')
+        .eq('team', 'Sales')
+        .in('line_of_business', ['K8 & Test Prep', 'K8'])
+
+      allowedEmails = validEmployees?.map(e => e.email) || []
+    }
+
+    if (allowedEmails.length === 0) {
+      return []
+    }
+
+    // Now fetch sample submissions
+    let query = supabase
+      .from('sample_submissions_k8_ay_26_27')
+      .select('*')
+      .in('employee_email', allowedEmails)
+
+    // Apply date filters
+    if (filters.startDate) {
+      query = query.gte('timestamp', filters.startDate)
+    }
+    if (filters.endDate) {
+      query = query.lte('timestamp', filters.endDate)
+    }
+
+    const { data, error } = await query.order('timestamp', { ascending: false })
+
+    if (error) throw error
+    return data || []
+  } catch (error) {
+    console.error('Error fetching sample submissions:', error)
+    return []
+  }
+}
+
+/**
+ * Calculate Sample Submission KPIs
+ */
+export const calculateSampleSubmissionKPIs = async (filters) => {
+  try {
+    const submissions = await getSampleSubmissions(filters)
+
+    // Total Sample Books Submitted - sum of total_books
+    const totalSampleBooks = submissions.reduce((sum, s) => sum + (parseInt(s.total_books) || 0), 0)
+
+    // Sample Submitted - Unique Schools (where visit_type = "School")
+    const uniqueSchools = new Set(
+      submissions
+        .filter(s => s.visit_type === 'School' && s.school_name)
+        .map(s => s.school_name)
+    ).size
+
+    // Sample Submitted - Unique Distributors (where visit_type = "Distributor")
+    const uniqueDistributors = new Set(
+      submissions
+        .filter(s => s.visit_type === 'Distributor' && s.school_name)
+        .map(s => s.school_name)
+    ).size
+
+    return {
+      totalSampleBooksSubmitted: totalSampleBooks,
+      uniqueSchools: uniqueSchools,
+      uniqueDistributors: uniqueDistributors,
+    }
+  } catch (error) {
+    console.error('Error calculating sample submission KPIs:', error)
+    return {
+      totalSampleBooksSubmitted: 0,
+      uniqueSchools: 0,
+      uniqueDistributors: 0,
+    }
   }
 }
 
